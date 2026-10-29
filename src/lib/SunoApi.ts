@@ -22,6 +22,7 @@ export const DEFAULT_MODEL = 'chirp-v3-5';
 
 export interface AudioInfo {
   id: string; // Unique identifier for the audio
+  download_unlocked?: boolean; // downloaded before under Suno's allowance: re-downloads are free
   title?: string; // Title of the audio
   image_url?: string; // URL of the image associated with the audio
   lyric?: string; // Lyrics of the audio
@@ -730,6 +731,7 @@ class SunoApi {
         video_url: audio.video_url,
         created_at: audio.created_at,
         model_name: audio.model_name,
+        download_unlocked: audio.is_download_unlocked,
         status: audio.status,
         gpt_description_prompt: audio.metadata.gpt_description_prompt,
         prompt: audio.metadata.prompt,
@@ -891,6 +893,7 @@ class SunoApi {
       video_url: audio.video_url,
       created_at: audio.created_at,
       model_name: audio.model_name,
+      download_unlocked: audio.is_download_unlocked,
       status: audio.status,
       gpt_description_prompt: audio.metadata.gpt_description_prompt,
       prompt: audio.metadata.prompt,
@@ -923,8 +926,29 @@ class SunoApi {
       credits_left: response.data.total_credits_left,
       period: response.data.period,
       monthly_limit: response.data.monthly_limit,
-      monthly_usage: response.data.monthly_usage
+      monthly_usage: response.data.monthly_usage,
+      // Suno's download allowance (2026-09: Pro 20 / Premier 60 songs a month; a song downloaded once stays free)
+      downloads_used: response.data.download_usage?.current_period_downloads_used,
+      downloads_limit: response.data.download_usage?.current_period_downloads_limit,
+      downloads_extra: response.data.download_usage?.additional_download_remaining,
+      renews_on: response.data.renews_on
     };
+  }
+
+  /**
+   * One step of Suno's current single-clip download (what the web Download button calls). Poll it until
+   * `status: "ready"` with a signed `download_url`; `processing` while Suno converts. Locked clips over the account's
+   * download allowance answer `{ ok: false, reason: "not_authorized" }`; `rate_limited` means wait and retry.
+   * The legacy convert_wav / wav_file pair returns `{}` for those clips.
+   */
+  public async getDownload(clipId: string, format: 'wav' | 'mp3' | 'm4a' = 'wav'): Promise<object> {
+    if (!/^[0-9a-f-]{36}$/i.test(clipId)) throw new Error('invalid clip id');
+    await this.keepAlive(false);
+    const response = await this.client.get(
+      `${SunoApi.BASE_URL}/api/download/clip/${clipId}?format=${format}`,
+      { timeout: 30000 }
+    );
+    return response.data;
   }
 
   public async getPersonaPaginated(personaId: string, page: number = 1): Promise<PersonaResponse> {
