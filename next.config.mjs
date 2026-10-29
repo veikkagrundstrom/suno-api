@@ -9,6 +9,8 @@ const nextConfig = {
   },
   experimental: {
     serverMinification: false, // the server minification unfortunately breaks the selector class names
+    // load the browser automation from node_modules at runtime: bundling it trips on its optional native deps
+    serverComponentsExternalPackages: ['rebrowser-playwright-core', 'ghost-cursor-playwright', '@2captcha/captcha-solver', 'electron'],
   },
 };  
 
